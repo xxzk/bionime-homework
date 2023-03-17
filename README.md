@@ -43,6 +43,24 @@ aws cloudformation create-stack \
 ▲ 創建一個 role for EKS
 
 
+2. 建立 Worker Node
+3. 新增 `kubeconfig`
+
+`AWS` 指令有提供新增 kubeconfig 的功能
+
+```bash
+aws eks update-kubeconfig --region ap-southeast-1 --name my-cluster
+```
+
+![aws_cli_update_kube_config](images/aws_cli_update_kube_config.jpg)
+
+▲ 更新後還會自動切換 current cluster，真不錯~
+
+
+![k_get_node](images/k_get_node.jpg)
+
+▲ 透過 `kubectl get nodes` 確認旗下 worker node 是否正常
+
 ## Flask API server
 
 
