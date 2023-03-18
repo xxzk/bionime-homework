@@ -44,9 +44,46 @@ aws cloudformation create-stack \
 
 
 2. 建立 Worker Node
-3. 新增 `kubeconfig`
 
-`AWS` 指令有提供新增 kubeconfig 的功能
+
+![config_eks_node_group_1](images/config_eks_node_group_1.jpg)
+
+▲ 建立 EKS managed worker node group。(註: `myAmazonEKSNodeRole` 是 attach `node-role-trust-policy` 這個 policy)
+
+
+![config_eks_node_group_2](images/config_eks_node_group_2.jpg)
+
+▲ 這邊可以選擇 EC2 instance type，如果想要省錢可以把 on-demand 改成 spot instance (但面臨競價)
+
+![config_eks_node_group_3](images/config_eks_node_group_3.jpg)
+
+▲ 設定 worker node desired 節點數量、最高離線節點數量 (worker node 升級會需要 drain 掉)
+
+
+![config_eks_node_group_4](images/config_eks_node_group_4.jpg)
+
+▲ VPC subnet 這邊選擇由先前 Cloudfomation stack 建立的四個
+
+
+![config_eks_node_group_5](images/config_eks_node_group_5.jpg)
+
+▲ config SSH access to nodes 打開後會跳警告
+
+
+![config_eks_node_group_6](images/config_eks_node_group_6.jpg)
+
+▲ 設定 SSH keypair、sg 等
+
+
+![config_eks_node_group_7](images/config_eks_node_group_7.jpg)
+
+▲ worker node group 建立後
+
+
+
+3. 更新 `kubeconfig`
+
+`AWS` 指令有提供更新 kubeconfig 的功能
 
 ```bash
 aws eks update-kubeconfig --region ap-southeast-1 --name my-cluster
@@ -61,7 +98,58 @@ aws eks update-kubeconfig --region ap-southeast-1 --name my-cluster
 
 ▲ 透過 `kubectl get nodes` 確認旗下 worker node 是否正常
 
-## Flask API server
+
+## 使用 Terraform 建立 EKS
+
+
+參考 [hashicorp/learn-terraform-provision-eks-cluster ](https://github.com/hashicorp/learn-terraform-provision-eks-cluster) 產生。
+
+
+- 建出來的 EC2 沒有 public IP 可以 SSH，以官方建議 EKS managed 的 worker node 來說也不建議開啟 SSH 權限，所以就把相關 IaC 程式碼移除。需要的可以參考 [terraform-aws-eks/examples/eks_managed_node_group/main.tf ](https://github.com/terraform-aws-modules/terraform-aws-eks/blob/v19.10.1/examples/eks_managed_node_group/main.tf)
+
+
+```yaml
+      remote_access = {
+        ec2_ssh_key               = module.key_pair.key_pair_name
+        source_security_group_ids = [aws_security_group.remote_access.id]
+      }
+```
+
+
+![eks_ec2_private_ip_only](images/eks_ec2_private_ip_only.jpg)
+
+▲ EKS managed worker node (EC2) 只有 private IP (我配置的關係) **如果有需要的話可以手動 attach 一個 Elastic IP、新增 security group 放行 SSH 訪問權限**
+
+
+- 收費項目: EKS cluster、KMS key (Terraform 找不到可以關的選項)、VPC NAT Gateway (如果不開的話 EC2 沒辦法 join cluster)
+
+
+![eks-vpc_internet_access](images/eks-vpc_internet_access.jpg)
+
+▲ 上圖證明 EKS cluster 擁有網路連外 (internet) 權限，能夠 pull image。
+
+
+### minikube demo
+
+
+**<span style='color:blue'>由於 EKS 限制 `t2.micro` 只能跑 4 個 pods 光是 K8s 系統本身就額滿，為了不讓帳單爆炸，我使用 `minikube` 來驗證 `flask-api-deployment.yaml` 與 `lb-service-flask-api.yaml` 是否可以使用。</span>**
+
+
+![aws_t2_micro_instance_limit](images/aws_t2_micro_instance_limit.jpg)
+
+▲ EKS 限制 `t2.micro` 只能跑 4 個 pods。[AWS EKS 0/1 nodes are available. 1 insufficient pods](https://stackoverflow.com/questions/58987840/aws-eks-0-1-nodes-are-available-1-insufficient-pods)
+
+
+如果 `service` type 使用 LoadBalance，則需先下 `minikube tunnel` 才能拿到 external IP。參考 [Accessing apps](https://minikube.sigs.k8s.io/docs/handbook/accessing/)
+
+
+![minikube_demo](images/minikube_demo.jpg)
+
+▲ 使用 `minikube` 測試兩個 YAML file 沒有問題
+
+
+
+## Flask API server 使用說明
 
 
 這次使用最簡單的範例，只能以 `GET` 方式獲取相同資訊
@@ -80,3 +168,5 @@ aws eks update-kubeconfig --region ap-southeast-1 --name my-cluster
 - [How to Deploy a Flask Application to a Kubernetes Cluster](https://sweetcode.io/how-to-deploy-a-flask-application-to-a-kubernetes-cluster/)
 - [關於 docker 出現 denied: requested access to the resource is denied 解決方式](https://israynotarray.com/docker/20220423/196903828/)
 - [我的第一支 Terraform](https://blog.xxzk.me/post/20210922-terraform-hello-world/)
+- [hashicorp/learn-terraform-provision-eks-cluster ](https://github.com/hashicorp/learn-terraform-provision-eks-cluster)
+- [[minikube] CKA Note Section 10 Design and Install a Kubernetes Cluster - 老柯的學習筆記](https://blog.xxzk.me/post/20220719-cka_note_section_10_design_and_install_a_kubernetes_cluster/#%E6%88%91%E7%9A%84-minikube)
